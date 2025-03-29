@@ -49,6 +49,9 @@ public class ContactServlet extends HttpServlet {
 
         String organization = request.getParameter("organization");
         String phoneHash = request.getParameter("phoneHash");
+        String maskedPhone = request.getParameter("maskedPhone");
+        String maskedName = request.getParameter("maskedName");
+
 
         if (organization != null && !organization.isEmpty()) {
             queryParams.append("organization=").append(URLEncoder.encode(organization, StandardCharsets.UTF_8)).append("&");
@@ -56,9 +59,15 @@ public class ContactServlet extends HttpServlet {
         if (phoneHash != null && !phoneHash.isEmpty()) {
             queryParams.append("phoneHash=").append(URLEncoder.encode(phoneHash, StandardCharsets.UTF_8)).append("&");
         }
+        if (maskedPhone != null && !maskedPhone.isEmpty()) {
+            queryParams.append("maskedPhone=").append(URLEncoder.encode(maskedPhone, StandardCharsets.UTF_8)).append("&");
+        }
+        if (maskedName != null && !maskedName.isEmpty()) {
+            queryParams.append("maskedName=").append(URLEncoder.encode(maskedName, StandardCharsets.UTF_8)).append("&");
+        }
 
         if (queryParams.length() > 0) {
-            apiUrl = API_URL + "search?" + queryParams.toString().replaceAll("&$", "");
+            apiUrl = API_URL + "/search?" + queryParams.toString().replaceAll("&$", "");
         }
         
         if ("edit".equals(action)) {
@@ -93,6 +102,7 @@ public class ContactServlet extends HttpServlet {
                     .header("Accept", "application/json").build();
 
             HttpResponse<String> responseApi = client.send(requestApi, HttpResponse.BodyHandlers.ofString());
+            System.out.println("responseApi" + responseApi);
             List<Contact> contacts = objectMapper.readValue(responseApi.body(), new TypeReference<>() {});
             
             request.setAttribute("contacts", contacts);
@@ -169,6 +179,9 @@ public class ContactServlet extends HttpServlet {
         json.addProperty("phoneNumber", phoneNumber);
         json.addProperty("email", email);
         json.addProperty("organization", organization);
+         json.addProperty("idNumber", idNumber);
+            json.addProperty("dateOfBirth", dateOfBirth);
+            json.addProperty("gender", gender);
 
         HttpRequest requestApi = HttpRequest.newBuilder()
                 .uri(URI.create(API_URL + "/" + id))

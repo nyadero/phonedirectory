@@ -9,7 +9,7 @@ package com.bowerzlabs.phonedirectory.bean;
  * @author bronyst
  */
 public class Contact {
-       private int id;
+    private int id;
     private String fullName;
     private String phoneNumber;
     private String email;
@@ -119,6 +119,8 @@ public class Contact {
         return "Contact{" + "id=" + id + ", fullName=" + fullName + ", phoneNumber=" + phoneNumber + ", email=" + email + ", idNumber=" + idNumber + ", dateOfBirth=" + dateOfBirth + ", gender=" + gender + ", organization=" + organization + ", maskedName=" + maskedName + ", maskedPhoneNumber=" + maskedPhoneNumber + ", hashedPhoneNumber=" + hashedPhoneNumber + '}';
     }
 
-    public void setMaskedPhoneNumber(String maskedPhoneNumber) {
-    }
+   public void setMaskedPhoneNumber(String maskedPhoneNumber) {
+    this.maskedPhoneNumber = maskedPhoneNumber;
+   }
+
 }

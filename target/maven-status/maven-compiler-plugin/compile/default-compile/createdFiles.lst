@@ -1,6 +1,5 @@
 com/bowerzlabs/phonedirectory/resources/JakartaEE10Resource.class
-com/bowerzlabs/phonedirectory/bean/Contact.class
 com/bowerzlabs/phonedirectory/web/ContactServlet$1.class
-com/bowerzlabs/phonedirectory/web/ContactsServlet.class
 com/bowerzlabs/phonedirectory/web/ContactServlet.class
+com/bowerzlabs/phonedirectory/bean/Contact.class
 com/bowerzlabs/phonedirectory/JakartaRestConfiguration.class

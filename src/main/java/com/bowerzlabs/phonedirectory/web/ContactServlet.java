@@ -23,6 +23,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.servlet.annotation.WebServlet;
 
 /**
@@ -31,29 +33,22 @@ import javax.servlet.annotation.WebServlet;
  */
 @WebServlet("/")
 public class ContactServlet extends HttpServlet {
-    private static final String API_URL_ALL = "http://localhost:8080/contactsregistry/api/contacts";
-    private static final String API_URL_ORG = "http://localhost:8080/contactsregistry/api/contacts/organization";
-    private static final String API_URL_SEARCH = "http://localhost:8080/contactsregistry/api/contacts/search";
+    private static final String API_URL = "http://localhost:8080/contactsregistry/api/contacts";
 
-@Override
-protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-    String organization = request.getParameter("organization");
-    String phoneHash = request.getParameter("phoneHash");
-    String maskedName = request.getParameter("maskedName");
-    String maskedPhone = request.getParameter("maskedPhone");
+    private final HttpClient client = HttpClient.newHttpClient();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-    String apiUrl = API_URL_ALL; // Default to fetch all contacts
-    boolean isSearch = false;
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        String action = request.getParameter("action");
+        System.out.println("action " + action);
 
-    StringBuilder queryParams = new StringBuilder();
-    
-    if (organization != null && !organization.isEmpty() || 
-        phoneHash != null && !phoneHash.isEmpty() || 
-        maskedName != null && !maskedName.isEmpty() || 
-        maskedPhone != null && !maskedPhone.isEmpty()) {
-        
-        apiUrl = API_URL_SEARCH + "?"; // Use search API when any filter is provided
-        isSearch = true;
+        // Fetch all or search contacts
+        String apiUrl = API_URL;
+        StringBuilder queryParams = new StringBuilder();
+
+        String organization = request.getParameter("organization");
+        String phoneHash = request.getParameter("phoneHash");
 
         if (organization != null && !organization.isEmpty()) {
             queryParams.append("organization=").append(URLEncoder.encode(organization, StandardCharsets.UTF_8)).append("&");
@@ -61,39 +56,159 @@ protected void doGet(HttpServletRequest request, HttpServletResponse response) t
         if (phoneHash != null && !phoneHash.isEmpty()) {
             queryParams.append("phoneHash=").append(URLEncoder.encode(phoneHash, StandardCharsets.UTF_8)).append("&");
         }
-        if (maskedName != null && !maskedName.isEmpty()) {
-            queryParams.append("maskedName=").append(URLEncoder.encode(maskedName, StandardCharsets.UTF_8)).append("&");
+
+        if (queryParams.length() > 0) {
+            apiUrl = API_URL + "search?" + queryParams.toString().replaceAll("&$", "");
         }
-        if (maskedPhone != null && !maskedPhone.isEmpty()) {
-            queryParams.append("maskedPhone=").append(URLEncoder.encode(maskedPhone, StandardCharsets.UTF_8)).append("&");
+        
+        if ("edit".equals(action)) {
+           // Fetch a single contact for editing
+           String contactId = request.getParameter("id");
+           if (contactId != null && !contactId.isEmpty()) {
+               try {
+                   HttpRequest requestApi = HttpRequest.newBuilder()
+                           .uri(URI.create(API_URL + "/" + contactId))
+                           .header("Accept", "application/json")
+                           .GET()
+                           .build();
+
+                   HttpResponse<String> responseApi = client.send(requestApi, HttpResponse.BodyHandlers.ofString());
+                   Contact contact = objectMapper.readValue(responseApi.body(), Contact.class);
+                   request.setAttribute("contact", contact);
+                   request.getRequestDispatcher("contact-form.jsp").forward(request, response);
+                   return;
+               } catch (Exception e) {
+                   e.printStackTrace();
+                   request.setAttribute("error", "Failed to fetch contact: " + e.getMessage());
+               }
+           }
+       }else if("delete".equals(action)){
+            doDelete(request, response);
+       }else if("create".equals(action)) {
+           request.getRequestDispatcher("contact-form.jsp").forward(request, response);
+       }else{
+
+        try {
+            HttpRequest requestApi = HttpRequest.newBuilder().uri(URI.create(apiUrl)).GET()
+                    .header("Accept", "application/json").build();
+
+            HttpResponse<String> responseApi = client.send(requestApi, HttpResponse.BodyHandlers.ofString());
+            List<Contact> contacts = objectMapper.readValue(responseApi.body(), new TypeReference<>() {});
+            
+            request.setAttribute("contacts", contacts);
+        } catch (Exception e) {
+            request.setAttribute("error", "Failed to fetch data: " + e.getMessage());
+            e.printStackTrace();
         }
 
-        apiUrl += queryParams.toString().replaceAll("&$", ""); // Remove trailing '&'
+        request.getRequestDispatcher("contacts.jsp").forward(request, response);
+        }
     }
 
-    try {
-        HttpClient client = HttpClient.newHttpClient();
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        String action = request.getParameter("action");
+    
+        if ("delete".equals(action)) {
+             doDelete(request, response);
+         } else if ("edit".equals(action)) {
+             doPut(request, response);
+         }else{
+             System.out.println("inside create contact");
+        // Create a new contact
+            String fullName = request.getParameter("fullName");
+            String phoneNumber = request.getParameter("phoneNumber");
+            String email = request.getParameter("email");
+            String idNumber = request.getParameter("idNumber");
+            String dateOfBirth = request.getParameter("dateOfBirth");
+            String gender = request.getParameter("gender");
+            String organization = request.getParameter("organization");
+
+            JsonObject json = new JsonObject();
+            json.addProperty("fullName", fullName);
+            json.addProperty("phoneNumber", phoneNumber);
+            json.addProperty("organization", organization);
+            json.addProperty("email", email);
+            json.addProperty("idNumber", idNumber);
+            json.addProperty("dateOfBirth", dateOfBirth);
+            json.addProperty("gender", gender);
+
         HttpRequest requestApi = HttpRequest.newBuilder()
-                .uri(URI.create(apiUrl))
-                .GET()
-                .header("Accept", "application/json")
+                .uri(URI.create(API_URL))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json.toString()))
                 .build();
 
-        HttpResponse<String> responseApi = client.send(requestApi, HttpResponse.BodyHandlers.ofString());
-        String jsonResponse = responseApi.body();
+        try {
+            HttpResponse<String> responseApi = client.send(requestApi, HttpResponse.BodyHandlers.ofString());
+            System.out.println("responseApi " + responseApi);
+        } catch (InterruptedException ex) {
+            Logger.getLogger(ContactServlet.class.getName()).log(Level.SEVERE, null, ex);
+        }
 
-        ObjectMapper objectMapper = new ObjectMapper();
-        List<Contact> contacts = objectMapper.readValue(jsonResponse, new TypeReference<List<Contact>>() {});
+         response.sendRedirect(request.getContextPath() + "/");
+ 
+        }
+      
+    }
+    
+        @Override
+    protected void doPut(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        System.out.println("Inside edit contact method");
+            int id = Integer.parseInt(request.getParameter("id"));
+            String fullName = request.getParameter("fullName");
+            String phoneNumber = request.getParameter("phoneNumber");
+            String email = request.getParameter("email");
+            String idNumber = request.getParameter("idNumber");
+            String dateOfBirth = request.getParameter("dateOfBirth");
+            String gender = request.getParameter("gender");
+            String organization = request.getParameter("organization");
 
-        request.setAttribute("contacts", contacts);
-    } catch (Exception e) {
-        request.setAttribute("error", "Failed to fetch data: " + e.getMessage());
-        e.printStackTrace();
+        JsonObject json = new JsonObject();
+        json.addProperty("fullName", fullName);
+        json.addProperty("phoneNumber", phoneNumber);
+        json.addProperty("email", email);
+        json.addProperty("organization", organization);
+
+        HttpRequest requestApi = HttpRequest.newBuilder()
+                .uri(URI.create(API_URL + "/" + id))
+                .header("Content-Type", "application/json")
+                .PUT(HttpRequest.BodyPublishers.ofString(json.toString()))
+                .build();
+
+        try {
+            client.send(requestApi, HttpResponse.BodyHandlers.ofString());
+        } catch (InterruptedException ex) {
+            Logger.getLogger(ContactServlet.class.getName()).log(Level.SEVERE, null, ex);
+        }
+
+         response.sendRedirect(request.getContextPath() + "/");
+
     }
 
-    request.setAttribute("isSearch", isSearch);
-    request.getRequestDispatcher("contacts.jsp").forward(request, response);
-}
 
+        @Override
+     protected void doDelete(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+                 System.out.println("Inside edit contact method");
+         String contactId = request.getParameter("id");
+            System.out.println("id " + contactId);
+
+         if (contactId != null && !contactId.isEmpty()) {
+             HttpRequest requestApi = HttpRequest.newBuilder()
+                     .uri(URI.create(API_URL + "/" + contactId))
+                     .DELETE()
+                     .build();
+             
+             System.out.println("API" + requestApi);
+
+             try {
+                 client.send(requestApi, HttpResponse.BodyHandlers.ofString());
+             } catch (InterruptedException ex) {
+                 Logger.getLogger(ContactServlet.class.getName()).log(Level.SEVERE, null, ex);
+             }
+         }
+
+            response.sendRedirect(request.getContextPath() + "/");
+     }
 
 }
